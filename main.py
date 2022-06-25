@@ -3,7 +3,7 @@ import struct
 from datetime import timedelta, datetime
 from decimal import Decimal, ROUND_HALF_UP
 from enum import IntEnum
-from math import floor, log
+from math import floor, log, ceil, log10
 
 import pandas as pd
 from pathlib import Path
@@ -63,16 +63,25 @@ def lat_lon_to_dsm(lat_or_lon):
     val_deg = floor(value)
     val_min = floor((value - val_deg) * 60)
     val_sec = (value - val_deg - val_min / 60) * 3600
-    # val_sec = round((value - val_deg - val_min / 60) * 3600 * 1000) // 1000
+    # val_sec = round((value - val_deg - val_min / 60) * 3600 * 1000) / 1000
 
     result = "-" if (lat_or_lon < 0) else "+"
     result += str(val_deg * 60 + val_min)
     result += "."
     result += str(val_sec)
 
+    if int(val_sec) > 0:
+        val_sec2 = val_sec / 10 ** ceil(log10(val_sec))
+    else:
+        val_sec2 = val_sec
+    print(result)
+    
+    integer_part = val_deg * 60 + val_min
+    result3 = integer_part + val_sec2
+
     result2 = (-1 if (lat_or_lon < 0) else 1) * val_deg * 60 + val_min + (val_sec / pow(10, (int(log(val_sec)) - 1)))
 
-    return result
+    return result3
 
 
 run_path = Path("./Acquisitions/2022_06_23_17_38_01_49.46685_01.14281_log.run")
