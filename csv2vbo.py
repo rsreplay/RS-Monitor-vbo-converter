@@ -219,8 +219,8 @@ class RSMonitorConverter(Converter):
 		}
 
 		self._user_map = {
-			"acc_lat": ("LatAcc", "m/s2"),
-			"acc_lon": ("LongAcc", "m/s2")
+			"latacc": ("LatAcc", "m/s2"),
+			"longacc": ("LongAcc", "m/s2")
 		}
 
 
