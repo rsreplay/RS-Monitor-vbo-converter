@@ -1,0 +1,6 @@
+pyreadline~=2.1
+config~=0.5.1
+StrEnum~=0.4.7
+PyQt6==6.3.1
+pyinstaller==5.3
+pandas==1.4.4

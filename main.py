@@ -1,15 +1,23 @@
-import csv
+from __future__ import annotations
+
 import re
 import struct
 import sys
 from datetime import timedelta, datetime
-from decimal import Decimal, ROUND_HALF_UP
-from enum import IntEnum
 from math import floor, log, ceil, log10
+from pathlib import Path
+from time import sleep
 
 import pandas as pd
-from pathlib import Path
+from PyQt6 import uic
+from PyQt6.QtCore import QThreadPool, Qt
+from PyQt6.QtGui import QIcon, QDragEnterEvent, QDropEvent
+from PyQt6.QtWidgets import QApplication, QMainWindow, QToolButton, QFileDialog, QLabel
 
+from Worker import Worker
+from bundle import bundle_dir
+from rsm_config import config
+from runtime import runtime
 from vars import *
 
 columns = [
@@ -69,7 +77,6 @@ column_names = {
     'heading': 'heading',
     'height': 'height',
 }
-
 
 
 def read_accel(value):
@@ -301,10 +308,111 @@ def convert(run_path):
     # print(leftover_bytes)
 
 
-if len(sys.argv) > 1:
-    for run_path in sys.argv[1:]:
-        print(f'Converting {run_path}...')
-        convert(Path(run_path))
-else:
-    run_path = Path("./Acquisitions/2022_06_23_17_38_01_49.46685_01.14281_log.run")
-    convert(run_path)
+def cli_app():
+    if len(sys.argv) > 1:
+        for run_path in sys.argv[1:]:
+            print(f'Converting {run_path}...')
+            convert(Path(run_path))
+    else:
+        run_path = Path("./Acquisitions/2022_06_23_17_38_01_49.46685_01.14281_log.run")
+        convert(run_path)
+
+
+class MainWindow(QMainWindow):
+    # Buttons
+    fileBrowserToolButton: QToolButton
+    convertToolButton: QToolButton
+    statusLabel: QLabel
+
+
+    def __init__(self, *args, **kwargs):
+        super(MainWindow, self).__init__(*args, **kwargs)
+        self.program_workers = 0
+        self.selected_files = []
+
+        # Load the UI Page
+        uic.loadUi(bundle_dir + 'ui/mainwindow.ui', self)
+
+        # Setup the bindings
+        self.fileBrowserToolButton.clicked.connect(self.open_file_browser)
+        self.convertToolButton.clicked.connect(self.run_conversion)
+
+        self.setWindowTitle(f'{self.windowTitle()} {runtime.version}')
+        self.setWindowIcon(QIcon(bundle_dir + '/img/icon.png'))
+
+    def dragEnterEvent(self, event: QDragEnterEvent ):
+        print(f'<={event.mimeData().text()}=>')
+        if event.mimeData().text().endswith('.run'):
+            event.setDropAction(Qt.DropAction.LinkAction)
+            event.accept()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        event.accept()
+        path = event.mimeData().text().removeprefix('file:///')
+        print(path)
+        self.selected_files.append(path)
+
+    def open_file_browser(self):
+        # Open the file browser
+        (self.selected_files, _) = QFileDialog.getOpenFileNames(self, 'Open file', config['lastDir'], f"RS Monitor Run files (*.run)")
+
+        self.update_selected_files()
+
+    def update_selected_files(self):
+        file_num = len(self.selected_files)
+        # Set the status bar text
+        if file_num == 0:
+            text = 'No file selected'
+        elif file_num == 1:
+            text = '1 file selected'
+        else:
+            text = f'{file_num} files selected'
+        self.statusLabel.setText(text)
+        # Save the last opened path if at least one file has been selected
+        if file_num:
+            self.convertToolButton.setEnabled(True)
+            config['lastDir'] = str(Path(self.selected_files[0]).parent.absolute())
+            config.save()
+
+    def program_done(self):
+        self.program_workers -= 1
+        if self.program_workers == 0:
+            self.convertToolButton.setDisabled(False)
+            self.statusLabel.setText(f'Done.')
+            print('Done.')
+
+    def run_conversion(self):
+        def test(run_path, *args, **kwargs):
+            workers_ = self.program_workers * 3
+            print('Sleeping for %d seconds...\n' % workers_)
+            sleep(workers_)
+            return run_path
+
+        for run_path in self.selected_files:
+            self.convertToolButton.setDisabled(True)
+            print(f'Converting {run_path}...')
+            self.statusLabel.setText(f'Converting {run_path}...')
+            worker = Worker(test, Path(run_path))
+            worker.signals.WrkRsult.connect(lambda p: print(f'Worker Done: {p}'))
+            worker.signals.WrksDone.connect(self.program_done)
+            # convert(Path(run_path))
+            self.program_workers += 1
+            QThreadPool.globalInstance().start(worker)
+
+
+def gui_app():
+    runtime.gui = True
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    runtime.main_window = window
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        cli_app()
+    else:
+        gui_app()
