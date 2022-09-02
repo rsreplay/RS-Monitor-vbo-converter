@@ -318,12 +318,16 @@ def cli_app():
         convert(run_path)
 
 
+def get_path_from_event(event):
+    paths = event.mimeData().text().split('\n')
+    return list(map(lambda p: p.removeprefix('file:///'), list(filter(None, paths))))
+
+
 class MainWindow(QMainWindow):
     # Buttons
     fileBrowserToolButton: QToolButton
     convertToolButton: QToolButton
     statusLabel: QLabel
-
 
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
@@ -340,23 +344,27 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f'{self.windowTitle()} {runtime.version}')
         self.setWindowIcon(QIcon(bundle_dir + '/img/icon.png'))
 
-    def dragEnterEvent(self, event: QDragEnterEvent ):
-        print(f'<={event.mimeData().text()}=>')
-        if event.mimeData().text().endswith('.run'):
-            event.setDropAction(Qt.DropAction.LinkAction)
-            event.accept()
-        else:
-            event.ignore()
+    def dragEnterEvent(self, event: QDragEnterEvent):
+        paths = get_path_from_event(event)
+        for path in paths:
+            if not path.endswith('.run'):
+                event.ignore()
+                return
+        event.setDropAction(Qt.DropAction.LinkAction)
+        event.accept()
 
     def dropEvent(self, event: QDropEvent) -> None:
         event.accept()
-        path = event.mimeData().text().removeprefix('file:///')
-        print(path)
-        self.selected_files.append(path)
+        paths = get_path_from_event(event)
+        print(paths)
+        for path in paths:
+            self.selected_files.append(path)
+        self.update_selected_files()
 
     def open_file_browser(self):
         # Open the file browser
-        (self.selected_files, _) = QFileDialog.getOpenFileNames(self, 'Open file', config['lastDir'], f"RS Monitor Run files (*.run)")
+        (self.selected_files, _) = QFileDialog.getOpenFileNames(self, 'Open file', config['lastDir'],
+                                                                f"RS Monitor Run files (*.run)")
 
         self.update_selected_files()
 
@@ -394,10 +402,9 @@ class MainWindow(QMainWindow):
             self.convertToolButton.setDisabled(True)
             print(f'Converting {run_path}...')
             self.statusLabel.setText(f'Converting {run_path}...')
-            worker = Worker(test, Path(run_path))
+            worker = Worker(convert, Path(run_path))
             worker.signals.WrkRsult.connect(lambda p: print(f'Worker Done: {p}'))
             worker.signals.WrksDone.connect(self.program_done)
-            # convert(Path(run_path))
             self.program_workers += 1
             QThreadPool.globalInstance().start(worker)
 
