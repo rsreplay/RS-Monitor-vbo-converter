@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import sys
 
 from bundle import bundle_dir, frozen
@@ -14,8 +13,20 @@ else:
 
 config = None
 
+default_config = {
+    'version': VERSION_LATEST,
+    'lastDir': '',
+    'checkboxes': {
+        'exportVbo': True,
+        'exportCsv': False,
+        'exportRawCsv': False,
+        'exportRawXslx': False
+    }
+}
+
 if not os.path.exists(json_path):
-    shutil.copy(bundle_dir + 'config.default.json', json_path)
+    with open(json_path, 'w') as f:
+        f.write(json.dumps(default_config, indent=2))
 
 
 class RSMConfig:
@@ -41,7 +52,9 @@ class RSMConfig:
 
     def save(self):
         with open(json_path, 'w') as config_file:
-            config_file.write(json.dumps(self._config, indent=2))
+            dumps = json.dumps(self._config, indent=2)
+            print(dumps)
+            config_file.write(dumps)
 
     def load(self):
         with open(json_path, 'r') as config_file:

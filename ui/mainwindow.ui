@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>350</width>
-    <height>150</height>
+    <height>228</height>
    </rect>
   </property>
   <property name="acceptDrops">
@@ -21,8 +21,36 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
-    <item row="1" column="0">
+    <item row="4" column="0">
      <layout class="QVBoxLayout" name="verticalLayout">
+      <item>
+       <widget class="QCheckBox" name="exportVboCheckBox">
+        <property name="text">
+         <string>Export .vbo file</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="exportCsvCheckBox">
+        <property name="text">
+         <string>Export .csv file</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="exportRawCsvCheckBox">
+        <property name="text">
+         <string>Export raw bytes as csv</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="exportRawXslxCheckBox">
+        <property name="text">
+         <string>Export raw bytes as xlsx</string>
+        </property>
+       </widget>
+      </item>
       <item>
        <widget class="QToolButton" name="fileBrowserToolButton">
         <property name="sizePolicy">

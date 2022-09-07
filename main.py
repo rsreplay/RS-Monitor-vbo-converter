@@ -11,8 +11,8 @@ from time import sleep
 import pandas as pd
 from PyQt6 import uic
 from PyQt6.QtCore import QThreadPool, Qt
-from PyQt6.QtGui import QIcon, QDragEnterEvent, QDropEvent
-from PyQt6.QtWidgets import QApplication, QMainWindow, QToolButton, QFileDialog, QLabel
+from PyQt6.QtGui import QIcon, QDragEnterEvent, QDropEvent, QCloseEvent
+from PyQt6.QtWidgets import QApplication, QMainWindow, QToolButton, QFileDialog, QLabel, QCheckBox
 
 from Worker import Worker
 from bundle import bundle_dir
@@ -121,7 +121,7 @@ def lat_lon_to_dsm(lat_or_lon):
     return lat_or_lon * 60
 
 
-def convert(run_path):
+def convert(run_path, export_options=None):
     export_columns = [
         'time',
         # 'latacc',
@@ -234,8 +234,9 @@ def convert(run_path):
     df = pd.DataFrame(data_array, columns=columns)
     # for column in columns:
     #     print(f"Average {column}: {df[column].mean():.2f}")
-    df.to_csv(run_path.parent / f'{run_path.stem}.csv', columns=export_columns,
-              index=False)  # , quoting=csv.QUOTE_NONNUMERIC )
+    if export_options is not None and export_options['exportCsv']:
+        df.to_csv(run_path.parent / f'{run_path.stem}.csv', columns=export_columns,
+                  index=False)  # , quoting=csv.QUOTE_NONNUMERIC )
     # df.to_excel(run_path.parent / f'{run_path.stem}.xlsx', columns=export_columns)
     # df.to_excel(run_path.parent / f'{run_path.stem}.xlsx', columns=export_columns)
     # df['time'] = df['time'] * 1000
@@ -277,33 +278,35 @@ def convert(run_path):
                 export_columns[i] = new_column_names[nc]
 
     df.rename(columns=new_column_names, inplace=True)
-    with open(run_path.parent / f'{run_path.stem}.vbo', 'w') as vbo:
-        vbo.write(datetime.now().strftime("File created on %d/%m/%Y at %I:%M:%S %p"))
-        vbo.write('\n')
-        vbo.write('\n')
 
-        vbo.write('[header]\n')
-        vbo.write('\n'.join([column_names[c] for c in export_columns]) + '\n')
-        vbo.write('\n')
+    if export_options is not None and export_options['exportVbo']:
+        with open(run_path.parent / f'{run_path.stem}.vbo', 'w') as vbo:
+            vbo.write(datetime.now().strftime("File created on %d/%m/%Y at %I:%M:%S %p"))
+            vbo.write('\n')
+            vbo.write('\n')
 
-        vbo.write('[comments]\n')
-        # # vbo.write('(c) 2001 2003 Racelogic\n')
-        # # vbo.write('VBox II Version 4.5a\n')
-        # # vbo.write('GPS : SSX2g\n')
-        # # vbo.write('Serial Number : 005201\n')
-        # # vbo.write('CF Version 2.1d\n')
-        vbo.write('Log Rate (Hz) : 10.00\n')
-        vbo.write('name Abbeville\n')
-        vbo.write('\n')
+            vbo.write('[header]\n')
+            vbo.write('\n'.join([column_names[c] for c in export_columns]) + '\n')
+            vbo.write('\n')
 
-        vbo.write('[column names]\n')
-        vbo.write(' '.join(export_columns) + '\n')
-        vbo.write('\n')
+            vbo.write('[comments]\n')
+            # # vbo.write('(c) 2001 2003 Racelogic\n')
+            # # vbo.write('VBox II Version 4.5a\n')
+            # # vbo.write('GPS : SSX2g\n')
+            # # vbo.write('Serial Number : 005201\n')
+            # # vbo.write('CF Version 2.1d\n')
+            vbo.write('Log Rate (Hz) : 10.00\n')
+            vbo.write('name Abbeville\n')
+            vbo.write('\n')
 
-        vbo.write('[data]\n')
-        data = df.to_string(columns=export_columns, index=False, header=False)
-        vbo.write(re.sub(r' +', ' ', data))
-        vbo.write('\n')
+            vbo.write('[column names]\n')
+            vbo.write(' '.join(export_columns) + '\n')
+            vbo.write('\n')
+
+            vbo.write('[data]\n')
+            data = df.to_string(columns=export_columns, index=False, header=False)
+            vbo.write(re.sub(r' +', ' ', data))
+            vbo.write('\n')
     leftover_bytes = data[LINE_LENGTH * nb_lines:]
     # print(leftover_bytes)
 
@@ -323,11 +326,19 @@ def get_path_from_event(event):
     return list(map(lambda p: p.removeprefix('file:///'), list(filter(None, paths))))
 
 
+def check_state(status):
+    return Qt.CheckState.Checked if status else Qt.CheckState.Unchecked
+
+
 class MainWindow(QMainWindow):
     # Buttons
     fileBrowserToolButton: QToolButton
     convertToolButton: QToolButton
     statusLabel: QLabel
+    exportVboCheckBox: QCheckBox
+    exportCsvCheckBox: QCheckBox
+    exportRawCsvCheckBox: QCheckBox
+    exportRawXslxCheckBox: QCheckBox
 
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
@@ -343,6 +354,23 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(f'{self.windowTitle()} {runtime.version}')
         self.setWindowIcon(QIcon(bundle_dir + '/img/icon.png'))
+
+        # Fill the config elements
+        def _load_config_items():
+            self.exportVboCheckBox.setCheckState(check_state(config['checkboxes']['exportVbo']))
+            self.exportCsvCheckBox.setCheckState(check_state(config['checkboxes']['exportCsv']))
+            self.exportRawCsvCheckBox.setCheckState(check_state(config['checkboxes']['exportRawCsv']))
+            self.exportRawXslxCheckBox.setCheckState(check_state(config['checkboxes']['exportRawXslx']))
+
+        self.exportVboCheckBox.clicked.connect(lambda s: config['checkboxes'].__setitem__('exportVbo', s))
+        self.exportCsvCheckBox.clicked.connect(lambda s: config['checkboxes'].__setitem__('exportCsv', s))
+        self.exportRawCsvCheckBox.clicked.connect(lambda s: config['checkboxes'].__setitem__('exportRawCsv', s))
+        self.exportRawXslxCheckBox.clicked.connect(lambda s: config['checkboxes'].__setitem__('exportRawXslx', s))
+
+        _load_config_items()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        config.save()
 
     def dragEnterEvent(self, event: QDragEnterEvent):
         paths = get_path_from_event(event)
@@ -398,11 +426,13 @@ class MainWindow(QMainWindow):
             sleep(workers_)
             return run_path
 
+        config.save()
+
         for run_path in self.selected_files:
             self.convertToolButton.setDisabled(True)
             print(f'Converting {run_path}...')
             self.statusLabel.setText(f'Converting {run_path}...')
-            worker = Worker(convert, Path(run_path))
+            worker = Worker(convert, Path(run_path), config['checkboxes'])
             worker.signals.WrkRsult.connect(lambda p: print(f'Worker Done: {p}'))
             worker.signals.WrksDone.connect(self.program_done)
             self.program_workers += 1
